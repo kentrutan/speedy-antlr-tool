@@ -5,11 +5,13 @@ class ContextData:
     Represents a RuleContext from the parser
     """
 
-    def __init__(self, ctx_classname:str, label_ctx_classname:str, is_label_parent:bool, labels:List[str]):
+    def __init__(self, ctx_classname:str, label_ctx_classname:str, is_label_parent:bool,
+                 labels:List[str], list_labels:List[str]):
         self.ctx_classname = ctx_classname
         self.label_ctx_classname = label_ctx_classname
         self.is_label_parent = is_label_parent
         self.labels = labels
+        self.list_labels = list_labels
 
     def __str__(self):
         s = []
@@ -19,6 +21,8 @@ class ContextData:
             s.append("%s:" % self.ctx_classname)
         for label in self.labels:
             s.append("\t%s" % label)
+        for list_label in self.list_labels:
+            s.append("\t%s" % list_label)
 
         return "\n".join(s)
 
@@ -28,10 +32,10 @@ class ContextData:
             ctx_name = self.label_ctx_classname
         else:
             ctx_name = self.ctx_classname
-        
+
         assert(ctx_name.endswith('Context'))
         return ctx_name[0].lower() + ctx_name[1:-7] # Truncate "Context"
-    
+
     @property
     def Rule_name(self):
         """

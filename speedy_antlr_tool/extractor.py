@@ -1,13 +1,12 @@
 import re
 import os
 import importlib.util
-from typing import List
+from typing import List, Tuple
 
 import antlr4
 import inspect
 
 from .objects import ContextData
-
 
 def get_parser_class(parser_path:str) -> antlr4.Parser:
     """
@@ -37,7 +36,7 @@ def iter_rule_context_classes(parser_cls:antlr4.Parser):
         yield obj
 
 
-def get_rule_labels(context_cls:antlr4.ParserRuleContext) -> List[str]:
+def get_rule_labels(context_cls:antlr4.ParserRuleContext) -> Tuple[List[str], List[str]]:
     """
     Given a ParserRuleContext class, return a list of token/context labels
 
@@ -51,12 +50,19 @@ def get_rule_labels(context_cls:antlr4.ParserRuleContext) -> List[str]:
     # Conveniently, the type name is provided as a comment
     lines, _ = inspect.getsourcelines(init_func)
     labels = []
+    list_labels = []
     for line in lines:
-        m = re.match(r'self\.(\w+)\s*=\s*None', line.strip())
-        if m:
-            labels.append(m.group(1))
+        line = line.strip()
+        # Match labels (no leading "_" excludes protected members)
+        match = re.match(r'self\.([a-zA-Z0-9]\w*)\s*=\s*None', line)
+        if match:
+            labels.append(match.group(1))
+        # Match list labels
+        match = re.match(r'self\.(\w+)\s*=\s*list\(\)', line)
+        if match:
+            list_labels.append(match.group(1))
 
-    return labels
+    return labels, list_labels
 
 
 def get_context_data(context_cls:antlr4.ParserRuleContext) -> ContextData:
@@ -74,14 +80,14 @@ def get_context_data(context_cls:antlr4.ParserRuleContext) -> ContextData:
         ctx_classname = context_cls.__bases__[0].__name__
         label_ctx_classname = context_cls.__name__
 
-    labels = get_rule_labels(context_cls)
+    labels, list_labels = get_rule_labels(context_cls)
 
     is_label_parent = bool(context_cls.__subclasses__())
 
-    return ContextData(ctx_classname, label_ctx_classname, is_label_parent, labels)
+    return ContextData(ctx_classname, label_ctx_classname, is_label_parent, labels, list_labels)
 
 
-def extract(parser_path:str) -> List[ContextData]:
+def extract(parser_path:str) -> Tuple[List[ContextData], str]:
     parser_cls = get_parser_class(parser_path)
 
     parser_basename = os.path.splitext(os.path.basename(parser_cls.grammarFileName))[0]
