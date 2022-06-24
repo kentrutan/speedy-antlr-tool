@@ -1,0 +1,1 @@
+recursive-include src/{{grammar_name|lower}}/parser/cpp_src *
