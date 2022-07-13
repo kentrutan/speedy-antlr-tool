@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 """Tool to generate a package with both pure Python and Python with C++ extension parsers
 """
-from lib2to3.pgen2 import grammar
 import re
 import os
 import sys
@@ -9,8 +8,12 @@ import shutil
 import argparse
 import logging
 import subprocess
+import importlib
+import io
+
+
 from pathlib import Path
-from typing import List, Tuple, Union, Optional
+from typing import List, Optional
 
 import jinja2 as jj
 
@@ -101,31 +104,21 @@ def generate_package(package_name: str, grammar_name: str, output_dir: Path) -> 
 
 def generate_antlr(java_exe: Path, antlr_jar: Path, output_dir: Path, grammar_file: Path, lexer_file: Optional[Path]) -> bool:
     """Generate Python and C++ parsers using ANTLR and return True if successful"""
+    log.info('Running ANTLR tool...')
     try:
-        # return_cwd = os.getcwd()
         cpp_dir = output_dir/'cpp_src'
-        # cpp_dir.mkdir(parents=True, exist_ok=True)
-        # os.chdir(output_dir)
-        # shutil.copy(str(grammar_file), str(output_dir))
-        # if lexer_file:
-        #     shutil.copy(str(lexer_file), str(output_dir))
-        antlr4 = '{} -Xmx500M -cp {} org.antlr.v4.Tool -Dlanguage={{}} -o {{}} {{}} {{}}'.format(java_exe, antlr_jar)
+        antlr4 = '{} -Xmx500M -cp {} org.antlr.v4.Tool -Dlanguage={{}} -Xexact-output-dir -o {{}} {{}} {{}}'.format(java_exe, antlr_jar)
         if lexer_file:
-            subprocess.run(antlr4.format('Python3', output_dir, '', lexer_file).split())
-            subprocess.check_output(antlr4.format('Cpp', cpp_dir, '', lexer_file), shell=True, stderr=subprocess.STDOUT)
-        subprocess.check_output(antlr4.format('Python3', output_dir, '-no-visitor -no-listener',
-                                grammar_file), shell=True, stderr=subprocess.STDOUT)
-        subprocess.check_output(antlr4.format('Cpp', cpp_dir, '-visitor -no-listener',
-                                grammar_file), shell=True, stderr=subprocess.STDOUT)
-    except OSError as exception:
-        log.error('ANTLR generation failed: %s', exception.strerror)
+            subprocess.run(antlr4.format('Python3', output_dir, '', lexer_file).split(), check=True)
+            subprocess.run(antlr4.format('Cpp', cpp_dir, '', lexer_file).split(), check=True)
+        subprocess.run(antlr4.format('Python3', output_dir, '-no-visitor -no-listener', grammar_file).split(), check=True)
+        subprocess.run(antlr4.format('Cpp', cpp_dir, '-visitor -no-listener', grammar_file).split(), check=True)
+    except OSError:
+        log.exception('ANTLR generation failed:')
         return False
     except subprocess.CalledProcessError as exception:
-        log.error('ANTLR generation failed: %s', exception.output)
+        log.error('ANTLR generation failed: %s', exception)
         return False
-    finally:
-        # os.chdir(return_cwd)
-        pass
 
     return True
 
@@ -147,12 +140,12 @@ def build_extension(project_dir: Path, verbose:bool=False) -> bool:
             capture = None
         else:
             capture = subprocess.PIPE
-        _ = subprocess.run([sys.executable, 'setup.py', 'build'], stdout=capture, stderr=capture)
+        subprocess.run([sys.executable, 'setup.py', 'build'], stdout=capture, stderr=capture, check=True)
     except OSError as exception:
         log.error('Error building extension: %s', exception.strerror)
         return False
     except subprocess.CalledProcessError as exception:
-        log.error('Build failed: %s', exception.output)
+        log.error('Build failed: %s', exception)
         return False
     finally:
         os.chdir(return_cwd)
@@ -160,18 +153,28 @@ def build_extension(project_dir: Path, verbose:bool=False) -> bool:
     return True
 
 
-def test_grammar(grammar_name: str, input_file: str):
+def test_grammar(grammar_name: str, input_file: str, rule: str) -> bool:
     'Test given grammar'
-    # TODO: Finish this
 
-    import grammar_name
+    try:
+        print('Printing syntax tree...')
+        grammar_module = importlib.import_module(grammar_name)
+        tree = io.StringIO()
+        grammar_module.print_tree(input_file, rule, stream=tree)
+        print(tree)
+        # TODO: Compare Python and C++ print_tree output.
+    except ImportError:
+        print('Error importing {}. Is it in sys.path?'.format(grammar_name), file=sys.stderr)
+        return False
 
-    grammar_name.print_tree(input_file)
-    grammar_name.benchmark(input_file, 1000)
-    #TODO: compare parse tree?
-    # with self.assertRaises(SystemExit) as context:
-    #     self.run_compiler(args, check_errors=False)
-    # self.assertEqual(context.exception.code, 0)
+    #TODO: compare C++ and Python parse trees
+    try:
+        print('Running benchmark (may be slow)...')
+        grammar_module.benchmark(input_file, rule, 1000)
+    except NameError:
+        print('Error running benchmark. Is C++ exension built and in sys.path?', file=sys.stderr)
+        return False
+    return True
 
 
 def main(argv: List[str]) -> int:
@@ -179,6 +182,23 @@ def main(argv: List[str]) -> int:
 
     :param argv: list of command line arguments, not including program name (pass "-h" for help printout)
     :return: nonzero if error
+
+    Examples:
+      Place the ANTLR jar in the top-level directory, put that directory in your PYTHONPATH, and run from there:
+        python speedy_antlr_tool/package.py -p abnf -o tests/generated -r rulelist -a antlr-4.9.3-complete.jar tests/antlr-grammars-v4/abnf/Abnf.g4
+
+      With separate lexer file and also building the C++ extension:
+        python speedy_antlr_tool/package.py -b -p abb -o tests/generated -r module -a antlr-4.9.3-complete.jar -l tests/antlr-grammars-v4/abb/abbLexer.g4 tests/antlr-grammars-v4/abb/abbParser.g4
+
+      Importing this module:
+        >>> from speedy_antlr_tool import package
+        >>> package.main(['-p', 'abnf', '-o', 'tests/generated', '-r', 'rulelist', '-a', 'antlr-4.9.3-complete.jar', 'tests/antlr-grammars-v4/abnf/Abnf.g4'])
+        Generating parser...
+        Successfully generated package in "tests/generated/abnf"
+        You can build the C++ extension with "python setup.py build".
+        0
+        >>>
+
     """
     argp = argparse.ArgumentParser(
         description='Given ANTLR grammar, create package with C++ extension and setup.py')
@@ -194,6 +214,8 @@ def main(argv: List[str]) -> int:
                     help='ANTLR tool jar file')
     argp.add_argument('-o', '--outdir', type=Path, default='.',
                     help='directory to contain package contents')
+    argp.add_argument('-b', '--build', action='store_true',
+                    help='build Python extension by running "setup.py build"')
     argp.add_argument('-j', '--javaexe', type=Path, default='java',
                     help='java executable file')
     argp.add_argument('-v', '--verbose', action='store_true',
@@ -222,6 +244,10 @@ def main(argv: List[str]) -> int:
         if match is None:
             log.error('Unable to parse grammar name from file "%s"', args.grammar)
         grammar_name = match.group(2)
+        # If separate lexer and parser files, ANTLR strips trailing "Parser"
+        if args.lexer and grammar_name.endswith('Parser'):
+            grammar_name = grammar_name[:-6]
+
     except OSError:
         argp.error('Unable to read grammar file: "{}"'.format(args.grammar))
 
@@ -230,18 +256,22 @@ def main(argv: List[str]) -> int:
     grammar_file_name = grammar_name + 'Parser.py'
     py_parser_path = (parser_dir/grammar_file_name)
     if not args.verbose:
-        print('Generating and building parser. Be patient, this can be very slow...')
+        print('Generating parser...')
     success = (
         generate_package(args.packagename, grammar_name, args.outdir) and (
         generate_antlr(args.javaexe, args.antlrjar, parser_dir, args.grammar, args.lexer)) and (
-        generate_extension(py_parser_path, parser_dir/'cpp_src', args.rules)) and (
-        build_extension(package_dir, args.verbose)
-        )
+        generate_extension(py_parser_path, parser_dir/'cpp_src', args.rules))
     )
+    if success and args.build:
+        if not args.verbose:
+            print('Building parser. This can be *very* slow...')
+        success = build_extension(package_dir, args.verbose)
     if not success:
         print('ERRORS FOUND. Progress is in "{}"'.format(package_dir), file=sys.stderr)
         return 1
-    log.info('Finished. Output is in "%s"', package_dir)
+    print('Successfully generated package in "{}"'.format(package_dir))
+    if not args.build:
+        print('You can build the C++ extension with "python setup.py build".')
 
     return 0
 
