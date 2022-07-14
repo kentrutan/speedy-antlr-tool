@@ -21,6 +21,7 @@ class AntlrGrammarsV4Test(unittest.TestCase):
     """
 
     def setUp(self):
+        # TODO: Clean out generated directory
         pass
 
     def tearDown(self):
@@ -38,15 +39,22 @@ class AntlrGrammarsV4Test(unittest.TestCase):
         elif len(hits) == 1:
             return hits[0]
         else:
+            # Default to Python parser
             return os.path.join(base_dir, 'src')
 
     def test_abb_example(self):
+        # TODO: STOPPED HERE. Turn this into test of all grammars-v4
+        # Automatically collect test examples from grammars-v4 by reading maven pom.xml files. Allow limiting list.
         grammar_dir = self.find_package_dir(os.path.join(PARSERS_DIR, 'abb'))
         self.assertNotEqual(grammar_dir, '', msg='Could not find unique package directory')
         grammar_name = 'abb'
-        example_file = os.path.join(GRAMMARS_DIR, 'abb', 'examples', 'robdata.sys')
         rule = 'module'
+        example_file = os.path.join(GRAMMARS_DIR, 'abb', 'examples', 'robdata.sys')
         sys.path.insert(0, str(grammar_dir))
+
+        # TODO: Make a python function api that takes same args as package.main()? Same for pymoca compiler. Avoid passing in list and parsing args. But will need to implement same arg checks as argparse. Violates DRY.
+        # package_args = '-v -p ...'.split()
+        # result = speedy_antlr_tool.package.main()
         self.assertTrue(speedy_antlr_tool.package.test_grammar(grammar_name, example_file, rule))
 
 
