@@ -15,7 +15,8 @@ class ExampleErrorListener(sa_{{grammar_name|lower}}.SA_ErrorListener):
         print("    column:", column)
         print("    msg:", msg)
 
-def print_tree(input_file:str, entry_rule:str):
+def tree_str(input_file:str, entry_rule:str) -> str:
+    'Given input file name and entry rule, return parse tree string (ANTLR lisp-like format)'
 
     if sa_{{grammar_name|lower}}.USE_CPP_IMPLEMENTATION:
         print("Using C++ implementation of parser")
@@ -29,4 +30,4 @@ def print_tree(input_file:str, entry_rule:str):
     stream = antlr4.FileStream(input_file)
     tree = sa_{{grammar_name|lower}}.parse(stream, entry_rule, sa_err_listener)
 
-    print(tree.toStringTree())
+    return tree.toStringTree()

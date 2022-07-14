@@ -89,7 +89,7 @@ def generate_package(package_name: str, grammar_name: str, output_dir: Path) -> 
             stream.dump(str(package_dir/template_file))
 
         # Overwrite grammar template files in output_dir
-        for template_file in ('benchmark.pyt', 'print_tree.pyt'):
+        for template_file in ('benchmark.pyt', 'tree_str.pyt'):
             template = jj_env.get_template(str(grammar_relative_path/template_file))
             stream = template.stream(context)
             template_path = grammar_dir/template_file
@@ -154,23 +154,39 @@ def build_extension(project_dir: Path, verbose:bool=False) -> bool:
 
 
 def test_grammar(grammar_name: str, input_file: str, rule: str) -> bool:
-    'Test given grammar'
+    'Test given grammar. Return False if any issues found'
 
     try:
         print('Printing syntax tree...')
         grammar_module = importlib.import_module(grammar_name)
-        tree = io.StringIO()
-        grammar_module.print_tree(input_file, rule, stream=tree)
+        tree = grammar_module.tree_str(input_file, rule)
         print(tree)
         # TODO: Compare Python and C++ print_tree output.
+        parser = getattr(grammar_module, 'parser')
+        sa_parser = getattr(parser, 'sa_' + grammar_name)
+        sa_use_cpp = getattr(sa_parser, 'USE_CPP_IMPLEMENTATION')
+        if sa_use_cpp:
+            # Above ran C++ extension, now run Python
+            sa_use_cpp = False
+            tree_python = grammar_module.tree_str(input_file, rule)
+            if (tree != tree_python):
+                print('C++ and Python ANTLR tree print differs', file=sys.stderr)
+                # TODO: Do a diff?
+                return False
     except ImportError:
         print('Error importing {}. Is it in sys.path?'.format(grammar_name), file=sys.stderr)
         return False
+    return True
 
-    #TODO: compare C++ and Python parse trees
+def benchmark_grammar(grammar_name: str, input_file: str, rule: str):
+    'Benchmark given grammar. Return False if any issues found'
     try:
+        grammar_module = importlib.import_module(grammar_name)
         print('Running benchmark (may be slow)...')
         grammar_module.benchmark(input_file, rule, 1000)
+    except ImportError:
+        print('Error importing {}. Is it in sys.path?'.format(grammar_name), file=sys.stderr)
+        return False
     except NameError:
         print('Error running benchmark. Is C++ exension built and in sys.path?', file=sys.stderr)
         return False
