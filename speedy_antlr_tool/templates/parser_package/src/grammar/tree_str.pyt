@@ -30,4 +30,4 @@ def tree_str(input_file:str, entry_rule:str) -> str:
     stream = antlr4.FileStream(input_file)
     tree = sa_{{grammar_name|lower}}.parse(stream, entry_rule, sa_err_listener)
 
-    return tree.toStringTree()
+    return tree.toStringTree(recog=sa_{{grammar_name|lower}}.{{grammar_name}}Parser(''))
