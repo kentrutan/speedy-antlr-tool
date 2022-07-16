@@ -250,12 +250,15 @@ PyObject* Translator::convert_ctx(
 ErrorTranslatorListener::ErrorTranslatorListener(Translator *translator, PyObject *sa_err_listener) {
     this->translator = translator;
     this->sa_err_listener = sa_err_listener;
+    this->syntaxErrorFound = false;
 }
 
 void ErrorTranslatorListener::syntaxError(
     antlr4::Recognizer *recognizer, antlr4::Token *offendingSymbol, size_t line,
     size_t charPositionInLine, const std::string &msg, std::exception_ptr e
 ) {
+    this->syntaxErrorFound = true;
+
     // Get input stream from recognizer
     antlr4::IntStream *input_stream;
     if (antlrcpp::is<antlr4::Lexer *>(recognizer)) {

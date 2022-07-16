@@ -98,6 +98,10 @@ PyObject* do_parse(PyObject *self, PyObject *args) {
         }
         antlr4::tree::ParseTree *parse_tree;
         parse_tree = get_parse_tree(&parser, entry_rule_name);
+        if(err_listener.foundSyntaxError()){
+            PyErr_SetString(PyExc_SyntaxError, "Parse error");
+            throw speedy_antlr::PythonException();
+        }
 
         // Translate Parse tree to Python
         SA_{{grammar_name}}Translator visitor(&translator);

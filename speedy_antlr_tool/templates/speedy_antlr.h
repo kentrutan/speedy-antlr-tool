@@ -65,14 +65,17 @@ namespace speedy_antlr {
     class ErrorTranslatorListener : public antlr4::BaseErrorListener {
         Translator *translator;
         PyObject *sa_err_listener;
+        bool syntaxErrorFound;
 
         public:
         ErrorTranslatorListener(Translator *translator, PyObject *sa_err_listener);
-        
+
         void syntaxError(
             antlr4::Recognizer *recognizer, antlr4::Token *offendingSymbol, size_t line,
             size_t charPositionInLine, const std::string &msg, std::exception_ptr e
         );
+
+        bool foundSyntaxError() {return syntaxErrorFound;}
     };
 }
 
