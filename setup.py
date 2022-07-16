@@ -20,7 +20,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/amykyta3/speedy-antlr-tool",
-    packages=setuptools.find_packages(exclude=["test"]),
+    packages=setuptools.find_packages(exclude=["tests"]),
     include_package_data=True,
     python_requires='>=3.4',
     install_requires=[
@@ -48,5 +48,8 @@ setuptools.setup(
         "Documentation": "http://speedy-antlr-tool.readthedocs.io",
         "Source": "https://github.com/amykyta3/speedy-antlr-tool",
         "Tracker": "https://github.com/amykyta3/speedy-antlr-tool/issues",
+    },
+    entry_points={
+        'console_scripts': ['speedy=speedy_antlr_tool.package:main']
     },
 )
