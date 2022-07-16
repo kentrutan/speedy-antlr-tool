@@ -25,9 +25,17 @@ antlrcpp::Any SA_{{grammar_name}}Translator::visit{{d.Rule_name}}({{grammar_name
     {%- endfor %}
     };
 {%- endif %}
+{%- if d.list_labels %}
+    speedy_antlr::ListLabelMap list_labels[] = {
+    {%- for label in d.list_labels %}
+        {"{{label}}", static_cast<void *>(ctx->{{label}}.data()), ctx->{{label}}.size()}{% if not loop.last %},{% endif %}
+    {%- endfor %}
+    };
+{%- endif %}
     if(!{{d.Rule_name}}Context_cls) {{d.Rule_name}}Context_cls = PyObject_GetAttrString(translator->parser_cls, "{{d.Rule_name}}Context");
     PyObject *py_ctx = translator->convert_ctx(this, ctx, {{d.Rule_name}}Context_cls
-    {%- if d.labels %}, labels, {{d.labels|length}}{% endif %});
+    {%- if d.labels %}, labels, {{d.labels|length}}{% elif d.list_labels %}, NULL, 0{% endif %}
+    {%- if d.list_labels %}, list_labels, {{d.list_labels|length}}{% endif %});
     return py_ctx;
 }
 {% endfor %}

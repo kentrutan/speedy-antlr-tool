@@ -117,7 +117,8 @@ PyObject* Translator::convert_ctx(
     antlr4::tree::AbstractParseTreeVisitor *visitor,
     antlr4::ParserRuleContext *ctx,
     PyObject *ctx_cls,
-    LabelMap labels[], size_t n_labels
+    LabelMap labels[], size_t n_labels,
+    ListLabelMap list_labels[], size_t n_list_labels
 ){
     // Create py context class
     PyObject *py_ctx = new_cls(ctx_cls);
@@ -127,6 +128,9 @@ PyObject* Translator::convert_ctx(
 
     // Keep track of which labels were filled already
     std::vector<bool> label_used(n_labels, false);
+
+    // Python list labels (holds work in progress)
+    std::vector<PyObject *> py_list_labels(n_list_labels, NULL);
 
     // Convert all children
     PyObject *py_children = PyList_New(ctx->children.size());
@@ -196,6 +200,20 @@ PyObject* Translator::convert_ctx(
                 label_used[j] = true;
             }
         }
+        // Check if child is contained in one of the list labels
+        for(size_t j=0; j<n_list_labels; j++) {
+            void **list_label = static_cast<void **>(list_labels[j].list);
+            for(size_t k=0; k<list_labels[j].list_size; k++) {
+                if(child_ref == list_label[k]) {
+                    if(!py_list_labels[j]) {
+                        py_list_labels[j] = PyList_New(list_labels[j].list_size);
+                        PyObject_SetAttrString(py_ctx, list_labels[j].name, py_list_labels[j]);
+                    }
+                    PyList_SetItem(py_list_labels[j], k, py_label_candidate);
+                }
+            }
+        }
+
         Py_DECREF(py_label_candidate);
 
         // Steals reference to py_child
@@ -207,6 +225,13 @@ PyObject* Translator::convert_ctx(
     for(size_t j=0; j<n_labels; j++) {
         if(!label_used[j]) {
             PyObject_SetAttrString(py_ctx, labels[j].name, Py_None);
+        }
+    }
+
+    // Assign any remaining list labels to None
+    for(size_t j=0; j<n_list_labels; j++) {
+        if(!py_list_labels[j]) {
+            PyObject_SetAttrString(py_ctx, list_labels[j].name, Py_None);
         }
     }
 
