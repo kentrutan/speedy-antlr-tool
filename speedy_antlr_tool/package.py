@@ -111,7 +111,7 @@ def generate_antlr(java_exe: Path, antlr_jar: Path, output_dir: Path, grammar_fi
         if lexer_file:
             subprocess.run(antlr4.format('Python3', output_dir, '', lexer_file).split(), check=True)
             subprocess.run(antlr4.format('Cpp', cpp_dir, '', lexer_file).split(), check=True)
-        subprocess.run(antlr4.format('Python3', output_dir, '-no-visitor -no-listener', grammar_file).split(), check=True)
+        subprocess.run(antlr4.format('Python3', output_dir, '-visitor -listener', grammar_file).split(), check=True)
         subprocess.run(antlr4.format('Cpp', cpp_dir, '-visitor -no-listener', grammar_file).split(), check=True)
     except OSError:
         log.exception('ANTLR generation failed:')
