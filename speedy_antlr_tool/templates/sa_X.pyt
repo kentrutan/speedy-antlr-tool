@@ -7,7 +7,7 @@ import types
 import antlr4
 from antlr4 import InputStream, CommonTokenStream, Token
 from antlr4.tree.Tree import ParseTree
-from antlr4.error.ErrorListener import ErrorListener
+from antlr4.error.ErrorListener import ConsoleErrorListener
 
 from .{{grammar_name}}Parser import {{grammar_name}}Parser
 from .{{grammar_name}}Lexer import {{grammar_name}}Lexer
@@ -109,13 +109,14 @@ def _cpp_parse(stream:InputStream, entry_rule_name:str, sa_err_listener:SA_Error
 # Fall-back Python implementation of parser
 #-------------------------------------------------------------------------------
 
-class _FallbackErrorTranslator(ErrorListener):
+class _FallbackErrorTranslator(ConsoleErrorListener):
     """
-    Translates syntax error to user-defined SA_ErrorListener callback
+    Translates syntax error to user-defined SA_ErrorListener callback or defers to ANTLR
     """
-    def __init__(self, sa_err_listener:SA_ErrorListener, input_stream:InputStream):
+    def __init__(self, input_stream:InputStream, sa_err_listener:SA_ErrorListener=None):
         self.sa_err_listener = sa_err_listener
         self.input_stream = input_stream
+        self.syntax_error = False
 
     def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
         if isinstance(recognizer, antlr4.Lexer):
@@ -125,31 +126,37 @@ class _FallbackErrorTranslator(ErrorListener):
         else:
             raise RuntimeError("Unknown recognizer type")
 
+        self.syntax_error = True
+
         char_index = input_stream.index
 
-        self.sa_err_listener.syntaxError(
-            self.input_stream, offendingSymbol, char_index, line, column, msg
-        )
+        if self.sa_err_listener:
+            self.sa_err_listener.syntaxError(
+                self.input_stream, offendingSymbol, char_index, line, column, msg
+            )
+        else:
+            super().syntaxError(recognizer, offendingSymbol, line, column, msg, e)
 
 
 def _py_parse(stream:InputStream, entry_rule_name:str, sa_err_listener:SA_ErrorListener=None) -> ParseTree:
-    if sa_err_listener is not None:
-        err_listener = _FallbackErrorTranslator(sa_err_listener, stream)
+    err_listener = _FallbackErrorTranslator(stream, sa_err_listener)
 
     # Lex
     lexer = {{grammar_name}}Lexer(stream)
-    if sa_err_listener is not None:
-        lexer.removeErrorListeners()
-        lexer.addErrorListener(err_listener)
+    lexer.removeErrorListeners()
+    lexer.addErrorListener(err_listener)
     token_stream = CommonTokenStream(lexer)
 
     # Parse
     parser = {{grammar_name}}Parser(token_stream)
-    if sa_err_listener is not None:
-        parser.removeErrorListeners()
-        parser.addErrorListener(err_listener)
+    parser.removeErrorListeners()
+    parser.addErrorListener(err_listener)
 
     entry_rule_func = getattr(parser, entry_rule_name, None)
     if not isinstance(entry_rule_func, types.MethodType):
         raise ValueError("Invalid entry_rule_name '%s'" % entry_rule_name)
-    return entry_rule_func()
+    tree = entry_rule_func()
+    # C++ parser raises Python SyntaxError so make Python do same.
+    if err_listener.syntax_error:
+        raise SyntaxError
+    return tree
